@@ -2114,38 +2114,22 @@ func handleAddCommand(profile string, args []string, inspectFlags func(*flag.Fla
 		session.ReconcileDeclarativeGroups(groupTree, cfg)
 	}
 
-	// Resolve parent session if specified
-	var parentInstance *session.Instance
-	if sessionParent != "" {
-		var errMsg string
-		parentInstance, errMsg, _ = ResolveSession(sessionParent, instances)
-		if parentInstance == nil {
-			fmt.Printf("Error: %s\n", errMsg)
-			os.Exit(1)
-			return // unreachable, satisfies staticcheck SA5011
-		}
-		// Sub-sessions cannot have sub-sessions (single level only)
-		if parentInstance.IsSubSession() {
-			fmt.Printf("Error: cannot create sub-session of a sub-session (single level only)\n")
-			os.Exit(1)
-		}
+	// Resolve parent session (see selectLaunchParent)
+	parentInstance, parentNote, parentErr := selectLaunchParent(sessionParent, *noParent, instances)
+	if parentErr != nil {
+		message, _ := launchParentErrorParts(parentErr)
+		fmt.Printf("Error: %s\n", message)
+		os.Exit(1)
+	}
+	if parentNote != "" {
+		fmt.Fprintln(os.Stderr, parentNote)
+	}
+	if parentInstance != nil {
 		// handleAdd resolves `path` AFTER this block (see below), so the
 		// cwd-derived group is not available here. Passing "" preserves
 		// handleAdd's existing behavior; the #972 cwd-over-parent priority
 		// is wired into `launch` where path is already known at this point.
 		sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
-	} else if !*noParent {
-		var unresolvedParent string
-		parentInstance, unresolvedParent = resolveAutoParentInstanceChecked(instances)
-		if parentInstance == nil && unresolvedParent != "" {
-			fmt.Printf("Error: automatic parent %q could not be resolved; use --parent with a valid session or --no-parent for an intentional top-level session\n", unresolvedParent)
-			os.Exit(1)
-		}
-		if parentInstance != nil && !parentInstance.IsSubSession() {
-			sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
-		} else {
-			parentInstance = nil
-		}
 	}
 
 	// Resolve group selector to a canonical path when possible.
