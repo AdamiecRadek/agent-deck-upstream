@@ -165,6 +165,50 @@ func TestLaunchParent_PrecheckAcceptsDanglingParentCaller(t *testing.T) {
 	}
 }
 
+// fakeTmux puts a tmux on PATH that records every call and answers with the
+// session name of the fixture's child.
+func fakeTmux(t *testing.T, childID string) (marker string) {
+	t.Helper()
+	dir := t.TempDir()
+	marker = filepath.Join(dir, "probed")
+	script := "#!/bin/sh\ntouch " + marker + "\necho agentdeck_Child_" + childID + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TMUX", "/tmp/fake,1,0")
+	return marker
+}
+
+func TestLaunchParent_EnvIdentitySkipsTheTmuxProbe(t *testing.T) {
+	f := newParentFixture()
+	for _, noParent := range []bool{true, false} {
+		marker := fakeTmux(t, f.child.ID)
+		t.Setenv("AGENT_DECK_SESSION_ID", "")
+		t.Setenv("AGENTDECK_INSTANCE_ID", f.parent.ID)
+		if _, note, err := selectLaunchParent("", noParent, f.all); err != nil || note != "" {
+			t.Fatalf("noParent=%v: note=%q err=%v, want neither", noParent, note, err)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("noParent=%v: tmux was probed although the environment named a top-level caller", noParent)
+		}
+	}
+}
+
+func TestLaunchParent_TmuxIdentityStillUsedWithoutEnv(t *testing.T) {
+	f := newParentFixture()
+	marker := fakeTmux(t, f.child.ID)
+	t.Setenv("AGENT_DECK_SESSION_ID", "")
+	t.Setenv("AGENTDECK_INSTANCE_ID", "")
+	p, note, err := selectLaunchParent("", true, f.all)
+	if err != nil || p != nil || !strings.Contains(note, f.parent.Title) {
+		t.Fatalf("got parent=%v note=%q err=%v, want top-level with the note naming the parent", p, note, err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("tmux was not probed with no environment identity: %v", err)
+	}
+}
+
 func TestLaunchParent_NoParentFlagStaysTopLevel(t *testing.T) {
 	f := newParentFixture()
 	for _, tc := range []struct {
@@ -182,8 +226,8 @@ func TestLaunchParent_NoParentFlagStaysTopLevel(t *testing.T) {
 				t.Fatalf("got parent=%v err=%v, want top-level", p, err)
 			}
 			if tc.wantNote {
-				if !strings.Contains(note, f.parent.Title) {
-					t.Fatalf("note %q must name the parent %q", note, f.parent.Title)
+				if !strings.Contains(note, f.parent.Title) || !strings.Contains(note, "--no-parent") {
+					t.Fatalf("note %q must name the parent %q and spell --no-parent", note, f.parent.Title)
 				}
 			} else if note != "" {
 				t.Fatalf("unexpected note %q", note)

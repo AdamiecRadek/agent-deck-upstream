@@ -76,7 +76,7 @@ func handleLaunchCommand(profile string, args []string, inspectFlags func(*flag.
 	noAssertDone := fs.Bool("no-assert-done", false, "Disable the completion-sentinel instruction")
 	parent := fs.String("parent", "", "Parent session (creates sub-session; group is cwd-derived by default — auto-inherits the parent's group for git worktree children or with --inherit-group)")
 	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking")
+	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (a sub-session caller otherwise links under its top-level parent)")
 	// Keep a fanned-out child in the parent's group instead of the cwd-derived
 	// group. Without this, a child launched into a worktree (.worktrees/<branch>)
 	// derives its group from that leaf folder and lands in a per-branch group

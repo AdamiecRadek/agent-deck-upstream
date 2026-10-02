@@ -64,7 +64,7 @@ func selectLaunchParent(explicit string, noParent bool, instances []*session.Ins
 		if grandparent == nil || grandparent.IsSubSession() {
 			return nil, "", nil
 		}
-		return nil, fmt.Sprintf("-no-parent given from sub-session %s; started top-level instead of under its parent %s", caller.Title, grandparent.Title), nil
+		return nil, fmt.Sprintf("--no-parent given from sub-session %s; started top-level instead of under its parent %s", caller.Title, grandparent.Title), nil
 	}
 	if caller == nil {
 		if unresolved != "" {

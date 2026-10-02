@@ -1740,19 +1740,23 @@ func resolveAutoParentInstanceChecked(instances []*session.Instance) (*session.I
 		}
 	}
 
-	if tmuxCurrent := strings.TrimSpace(GetCurrentSessionID()); tmuxCurrent != "" {
-		candidates = append(candidates, tmuxCurrent)
-	}
-
 	seen := map[string]bool{}
-	for _, candidate := range candidates {
+	resolve := func(candidate string) *session.Instance {
 		if candidate == "" || seen[candidate] {
-			continue
+			return nil
 		}
 		seen[candidate] = true
-		if inst, _, _ := ResolveSession(candidate, instances); inst != nil {
+		inst, _, _ := ResolveSession(candidate, instances)
+		return inst
+	}
+	for _, candidate := range candidates {
+		if inst := resolve(candidate); inst != nil {
 			return inst, ""
 		}
+	}
+	// The tmux probe runs last, only when the environment named no session.
+	if inst := resolve(strings.TrimSpace(GetCurrentSessionID())); inst != nil {
+		return inst, ""
 	}
 	return nil, authoritative
 }
@@ -1809,7 +1813,7 @@ func handleAddCommand(profile string, args []string, inspectFlags func(*flag.Fla
 	)
 	parent := fs.String("parent", "", "Parent session (creates sub-session, inherits group)")
 	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (use 'session set-parent' later to link manually)")
+	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (use 'session set-parent' later to link manually; a sub-session caller otherwise links under its top-level parent)")
 	noTransitionNotify := fs.Bool("no-transition-notify", false, "Suppress transition event notifications to parent session")
 	// #697: conductor-friendly title lock. When set, Claude's session name
 	// (--name / /rename) never overwrites the agent-deck title. --no-title-sync
