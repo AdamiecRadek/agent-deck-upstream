@@ -37,7 +37,8 @@ func launchParentErrorParts(err error) (message, code string) {
 // top-level. When it is a sub-session, its own parent is used instead, with a
 // one-line note: the deck stores one level only, and a session started from a
 // sub-session belongs next to it. One hop, never a walk; a parent that is
-// missing or itself a sub-session is an error naming both ids.
+// itself a sub-session is an error naming both ids, and a parent that no longer
+// exists starts the session top-level with a note, as --no-parent does.
 //
 // noParent means top-level and is honoured from every caller. When the caller
 // is a sub-session the note says where the session would have landed. A caller
@@ -86,10 +87,7 @@ func underParent(inst *session.Instance, instances []*session.Instance) (*sessio
 	}
 	parent := findInstanceByID(instances, inst.ParentSessionID)
 	if parent == nil {
-		return nil, "", &launchParentError{
-			Code:    ErrCodeInvalidOperation,
-			Message: fmt.Sprintf("cannot attach to its parent: %s, the parent of sub-session %s, does not exist", inst.ParentSessionID, inst.ID),
-		}
+		return nil, fmt.Sprintf("parent %s of sub-session %s (%s) does not exist; started top-level as --no-parent does", inst.ParentSessionID, inst.Title, inst.ID), nil
 	}
 	if parent.IsSubSession() {
 		return nil, "", &launchParentError{

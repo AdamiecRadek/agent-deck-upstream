@@ -110,29 +110,58 @@ func TestLaunchParent_ExplicitParentUnknownErrors(t *testing.T) {
 	}
 }
 
-func TestLaunchParent_GrandparentMissingOrNotTopLevelErrors(t *testing.T) {
+func TestLaunchParent_GrandparentNotTopLevelErrors(t *testing.T) {
 	f := newParentFixture()
-
-	orphan := session.NewInstanceWithGroupAndTool("Orphan", "/proj/o", "g", "claude")
-	orphan.ID = "orp-0001"
-	orphan.SetParentWithPath("gone-0001", "/proj/gone")
-	setCaller(t, orphan.ID)
-	p, _, err := selectLaunchParent("", false, append(f.all, orphan))
-	if p != nil || err == nil || !strings.Contains(err.Error(), orphan.ID) || !strings.Contains(err.Error(), "gone-0001") {
-		t.Fatalf("dangling parent: got parent=%v err=%v, want an error naming both ids", p, err)
-	}
 
 	deep := session.NewInstanceWithGroupAndTool("Deep", "/proj/d", "g", "claude")
 	deep.ID = "dep-0001"
 	deep.SetParentWithPath(f.child.ID, f.child.ProjectPath)
 	setCaller(t, deep.ID)
-	p, _, err = selectLaunchParent("", false, append(f.all, deep))
+	p, _, err := selectLaunchParent("", false, append(f.all, deep))
 	if p != nil || err == nil || !strings.Contains(err.Error(), deep.ID) || !strings.Contains(err.Error(), f.child.ID) {
 		t.Fatalf("two-level chain: got parent=%v err=%v, want an error naming both ids, no walking further", p, err)
 	}
 	p, _, err = selectLaunchParent(deep.Title, false, append(f.all, deep))
 	if p != nil || err == nil {
 		t.Fatalf("explicit two-level chain: got parent=%v err=%v, want an error", p, err)
+	}
+}
+
+func TestLaunchParent_DanglingParentStartsTopLevelWithNote(t *testing.T) {
+	f := newParentFixture()
+	orphan := session.NewInstanceWithGroupAndTool("Orphan", "/proj/o", "g", "claude")
+	orphan.ID = "orp-0001"
+	orphan.SetParentWithPath("gone-0001", "/proj/gone")
+	setCaller(t, orphan.ID)
+	p, note, err := selectLaunchParent("", false, append(f.all, orphan))
+	if p != nil || err != nil {
+		t.Fatalf("dangling parent: got parent=%v err=%v, want top-level and no error", p, err)
+	}
+	for _, want := range []string{orphan.ID, "gone-0001", "--no-parent"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("note %q must mention %q", note, want)
+		}
+	}
+}
+
+func TestLaunchParent_PrecheckAcceptsDanglingParentCaller(t *testing.T) {
+	_, _, profile := setupAddDefaultPathTest(t)
+	f := seedParentRegistry(t, profile, "")
+	orphan := session.NewInstanceWithGroupAndTool("Orphan", "/proj/o", "g", "claude")
+	orphan.ID = "orp-0001"
+	orphan.SetParentWithPath("gone-0001", "/proj/gone")
+	storage, err := session.NewStorageWithProfile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storage.Close()
+	all := append(f.all, orphan)
+	if err := storage.SaveWithGroups(all, session.NewGroupTreeWithGroups(all, nil)); err != nil {
+		t.Fatal(err)
+	}
+	setCaller(t, orphan.ID)
+	if err := validateStartupQueryCapacity(profile, "", "", t.TempDir(), false, true, true, nil); err != nil {
+		t.Fatalf("dangling-parent caller refused by the pre-check: %v", err)
 	}
 }
 
