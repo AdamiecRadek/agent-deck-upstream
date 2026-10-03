@@ -76,7 +76,7 @@ func handleLaunchCommand(profile string, args []string, inspectFlags func(*flag.
 	noAssertDone := fs.Bool("no-assert-done", false, "Disable the completion-sentinel instruction")
 	parent := fs.String("parent", "", "Parent session (creates sub-session; group is cwd-derived by default — auto-inherits the parent's group for git worktree children or with --inherit-group)")
 	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (a sub-session caller otherwise links under its top-level parent)")
+	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking")
 	// Keep a fanned-out child in the parent's group instead of the cwd-derived
 	// group. Without this, a child launched into a worktree (.worktrees/<branch>)
 	// derives its group from that leaf folder and lands in a per-branch group
@@ -484,7 +484,7 @@ func handleLaunchCommand(profile string, args []string, inspectFlags func(*flag.
 	inheritParentGroup := shouldInheritParentGroup(explicitGroupProvided, *inheritGroup, func() bool {
 		return git.IsLinkedWorktree(path)
 	})
-	parentInstance, parentNote, parentErr := selectLaunchParent(sessionParent, *noParent, instances)
+	parentInstance, launchedBy, parentNote, parentErr := selectLaunchParent(sessionParent, *noParent, launchNestUnderParent(), instances)
 	if parentErr != nil {
 		message, code := launchParentErrorParts(parentErr)
 		out.Error(message, code)
@@ -750,6 +750,9 @@ func handleLaunchCommand(profile string, args []string, inspectFlags func(*flag.
 	autoHints := map[string]string{hintKeyPurpose: firstLineClipped(initialMessage, derivedPurposeLimit)}
 	if parentInstance != nil {
 		autoHints[hintKeyParent] = parentInstance.ID
+	}
+	if launchedBy != nil {
+		autoHints[hintKeyLaunchedBy] = launchedBy.ID
 	}
 	sessionHints, sessionTags := applyCreationHints(storage, newInstance, creationHints, autoHints)
 

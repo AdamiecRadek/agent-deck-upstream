@@ -1813,7 +1813,7 @@ func handleAddCommand(profile string, args []string, inspectFlags func(*flag.Fla
 	)
 	parent := fs.String("parent", "", "Parent session (creates sub-session, inherits group)")
 	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (use 'session set-parent' later to link manually; a sub-session caller otherwise links under its top-level parent)")
+	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (use 'session set-parent' later to link manually)")
 	noTransitionNotify := fs.Bool("no-transition-notify", false, "Suppress transition event notifications to parent session")
 	// #697: conductor-friendly title lock. When set, Claude's session name
 	// (--name / /rename) never overwrites the agent-deck title. --no-title-sync
@@ -2119,7 +2119,7 @@ func handleAddCommand(profile string, args []string, inspectFlags func(*flag.Fla
 	}
 
 	// Resolve parent session (see selectLaunchParent)
-	parentInstance, parentNote, parentErr := selectLaunchParent(sessionParent, *noParent, instances)
+	parentInstance, launchedBy, parentNote, parentErr := selectLaunchParent(sessionParent, *noParent, launchNestUnderParent(), instances)
 	if parentErr != nil {
 		message, _ := launchParentErrorParts(parentErr)
 		fmt.Printf("Error: %s\n", message)
@@ -2632,6 +2632,9 @@ func handleAddCommand(profile string, args []string, inspectFlags func(*flag.Fla
 	autoHints := map[string]string{}
 	if parentInstance != nil {
 		autoHints[hintKeyParent] = parentInstance.ID
+	}
+	if launchedBy != nil {
+		autoHints[hintKeyLaunchedBy] = launchedBy.ID
 	}
 	sessionHints, sessionTags := applyCreationHints(storage, newInstance, creationHints, autoHints)
 	// An operator-named conversation (--resume-session) is an explicit
